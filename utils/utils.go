@@ -58,7 +58,8 @@ func GetTailOffset(joint *Joint) vec3.T {
 
 func ParseHierarchy(scanner *bufio.Scanner, bvh *BVH) error {
 	var depth int = 0
-	var currentJoint *Joint
+	var currJoint *Joint
+	var currEndSite *Joint
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -67,41 +68,41 @@ func ParseHierarchy(scanner *bufio.Scanner, bvh *BVH) error {
 		// JOINT RightUpLeg
 		if fields[0] == "ROOT" || fields[0] == "JOINT" {
 			isRoot := fields[0] == "ROOT"
-			currentJoint = &Joint{
+			currJoint = &Joint{
 				Name:      fields[1],
 				Depth:     depth,
 				IsEndSite: false,
 				IsRoot:    isRoot,
 				IsLeaf:    false,
 				Children:  []*Joint{},
-				Parent:    currentJoint,
+				Parent:    currJoint,
 				RestPose:  &RestPose{},
 				Pose:      &Pose{},
 			}
 			if !isRoot {
-				currentJoint.Parent.Children = append(currentJoint.Parent.Children, currentJoint)
+				currJoint.Parent.Children = append(currJoint.Parent.Children, currJoint)
 			}
-			bvh.Joints = append(bvh.Joints, currentJoint)
+			bvh.Joints = append(bvh.Joints, currJoint)
 
 			// End Site
 		} else if strings.HasPrefix(strings.ToLower(line), "end") {
-			currentJoint.IsLeaf = true
-			var endSite *Joint = &Joint{
+			currJoint.IsLeaf = true
+			currEndSite = &Joint{
 				Name:      "ENDSITE",
 				Depth:     depth,
 				IsEndSite: true,
 				IsLeaf:    false,
 				Children:  nil,
 				RestPose: &RestPose{
-					PosOffsetFromParent: vec3.T{0, 0, 0},
+					PosOffsetFromParent: vec3.T{999, 999, 999},
 				},
 				Pose:     nil,
 				Channels: nil,
 				IsRoot:   false,
-				Parent:   currentJoint,
+				Parent:   currJoint,
 			}
-			endSite.Parent.Children = append(endSite.Parent.Children, endSite)
-			bvh.EndSites = append(bvh.EndSites, endSite)
+			currEndSite.Parent.Children = append(currEndSite.Parent.Children, currEndSite)
+			bvh.EndSites = append(bvh.EndSites, currEndSite)
 
 		} else if fields[0] == "{" {
 			depth++
@@ -118,18 +119,22 @@ func ParseHierarchy(scanner *bufio.Scanner, bvh *BVH) error {
 			x, _ := strconv.ParseFloat(offset[1], 64)
 			y, _ := strconv.ParseFloat(offset[2], 64)
 			z, _ := strconv.ParseFloat(offset[3], 64)
-			currentJoint.RestPose.PosOffsetFromParent = vec3.T{x, y, z}
+			if currEndSite != nil {
+				currEndSite.RestPose.PosOffsetFromParent = vec3.T{x, y, z}
+				currEndSite = nil
+			} else {
+				currJoint.RestPose.PosOffsetFromParent = vec3.T{x, y, z}
+			}
 
 			// Channels 3 Zrotation Xrotation Yrotation
 		} else if fields[0] == "CHANNELS" {
 			numChannels, _ := strconv.Atoi(fields[1])
-			if currentJoint.IsRoot && numChannels != 6 {
+			if currJoint.IsRoot && numChannels != 6 {
 				return fmt.Errorf("invalid number of channels for root joint: %s", line)
-			} else if !currentJoint.IsRoot && numChannels != 3 {
+			} else if !currJoint.IsRoot && numChannels != 3 {
 				return fmt.Errorf("invalid number of channels for non-root joint: %s", line)
 			}
-
-			currentJoint.Channels = fields[2:]
+			currJoint.Channels = fields[2:]
 			bvh.NumAllChannels += numChannels
 
 			// Frames: 129

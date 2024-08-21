@@ -11,7 +11,6 @@ import (
 	// import vec3, mat4 and quatetnion from go3d
 	"github.com/ungerik/go3d/float64/quaternion"
 	"github.com/ungerik/go3d/float64/vec3"
-	. "bvh-anim-parser/view3d"
 )
 
 // Opens and parses a BVH file.
@@ -80,7 +79,7 @@ func ParseBVH(filepath string) (*BVH, error) {
 }
 
 func main() {
-	bvhPath := "./walk_ff_loop_180_R_001__A422.bvh"
+	bvhPath := "./test_anim.bvh"
 
 	bvh, err := ParseBVH(bvhPath)
 	if err != nil {
@@ -89,4 +88,21 @@ func main() {
 	}
 
 	fmt.Printf("Parsed BVH File: %+v\n", bvh)
+
+	bvhJSON, err := utils.ToJSON(bvh)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	
+	// save the JSON to a file
+	jsonFile, err := os.Create("bvh.json")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer jsonFile.Close()
+	
+	jsonFile.WriteString(bvhJSON)
+	fmt.Println("BVH JSON saved to bvh.json")
 }
